@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from random import shuffle
 from functools import lru_cache
 from fastapi import FastAPI, Query, Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -106,17 +107,14 @@ def top_banners_by_campaign_id(campaign_id, hour_quarter):
         else:
             top_banners = most_clicked_banners
 
-    shuffled_banner_ids = np.random.permutation(top_banners.index)
-
-    return list(shuffled_banner_ids)
+    return list(top_banners.index)
 
 
 @app.get("/campaigns/{campaign_id}", response_class=HTMLResponse)
-# @validate_url_param
 def get_images(campaign_id: int):
     hour_quarter = get_hour_quarter()
-    # validate_campaign_id = validate_url_param(campaign_id, hour_quarter)
     top_banner_ids = top_banners_by_campaign_id(campaign_id = campaign_id, hour_quarter=hour_quarter)
+    shuffled_banner_ids = shuffle(top_banner_ids)
 
     html_content = """
         <html>
