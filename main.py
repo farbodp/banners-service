@@ -1,0 +1,140 @@
+import numpy as np
+import pandas as pd
+from functools import lru_cache
+from fastapi import FastAPI, Query, Depends, HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+
+from utils.utils import read_csv_remove_duplicates, get_hour_quarter
+# from async_lru import alru_cache
+
+
+
+STATIC_DIR_NAME = "static"
+app = FastAPI()
+app.mount("/static", StaticFiles(directory="images"), name=STATIC_DIR_NAME)
+
+csv_sets = {}
+
+
+@app.on_event("startup")
+def startup_event():
+    impressions_1_df = read_csv_remove_duplicates("csv/1/impressions_1.csv", log_file_path='logs/impressions_1_duplicates.log')
+    impressions_2_df = read_csv_remove_duplicates("csv/2/impressions_2.csv", log_file_path='logs/impressions_2_duplicates.log')
+    impressions_3_df = read_csv_remove_duplicates("csv/3/impressions_3.csv", log_file_path='logs/impressions_3_duplicates.log')
+    impressions_4_df = read_csv_remove_duplicates("csv/4/impressions_4.csv", log_file_path='logs/impressions_4_duplicates.log')
+
+    clicks_1_df = read_csv_remove_duplicates("csv/1/clicks_1.csv", log_file_path='logs/clicks_1_duplicates.log')
+    clicks_2_df = read_csv_remove_duplicates("csv/2/clicks_2.csv", log_file_path='logs/clicks_2_duplicates.log')
+    clicks_3_df = read_csv_remove_duplicates("csv/3/clicks_3.csv", log_file_path='logs/clicks_3_duplicates.log')
+    clicks_4_df = read_csv_remove_duplicates("csv/4/clicks_4.csv", log_file_path='logs/clicks_4_duplicates.log')
+
+    conversions_1_df = read_csv_remove_duplicates("csv/1/conversions_1.csv", log_file_path='logs/conversions_1_duplicates.log')
+    conversions_2_df = read_csv_remove_duplicates("csv/2/conversions_2.csv", log_file_path='logs/conversions_2_duplicates.log')
+    conversions_3_df = read_csv_remove_duplicates("csv/3/conversions_3.csv", log_file_path='logs/conversions_3_duplicates.log')
+    conversions_4_df = read_csv_remove_duplicates("csv/4/conversions_4.csv", log_file_path='logs/conversions_4_duplicates.log')
+
+
+    csv_sets['impressions_1'] = impressions_1_df
+    csv_sets['impressions_2'] = impressions_2_df
+    csv_sets['impressions_3'] = impressions_3_df
+    csv_sets['impressions_4'] = impressions_4_df
+
+    csv_sets['clicks_1'] = clicks_1_df
+    csv_sets['clicks_2'] = clicks_2_df
+    csv_sets['clicks_3'] = clicks_3_df
+    csv_sets['clicks_4'] = clicks_4_df
+
+    csv_sets['conversions_1'] = conversions_1_df
+    csv_sets['conversions_2'] = conversions_2_df
+    csv_sets['conversions_3'] = conversions_3_df
+    csv_sets['conversions_4'] = conversions_4_df
+
+
+@lru_cache(maxsize=128)
+def top_banners_by_campaign_id(campaign_id, hour_quarter):
+
+    
+    impressions, clicks, conversions = csv_sets[f"impressions_{hour_quarter}"], csv_sets[f"clicks_{hour_quarter}"], csv_sets[f"conversions_{hour_quarter}"]
+
+    if campaign_id not in impressions['campaign_id'].unique():
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    # clicks = read_csv_remove_duplicates(f"csv/{hour_quarter}/clicks_{hour_quarter}.csv", log_file_path=f'logs/clicks_{hour_quarter}_duplicates.log')
+    # conversions = read_csv_remove_duplicates(f"csv/{hour_quarter}/conversions_{hour_quarter}.csv", log_file_path=f'logs/conversions_{hour_quarter}_duplicates.log')
+
+    # Join the dataframes together
+    impressions_clicks = pd.merge(impressions, clicks, on=["banner_id", "campaign_id"], how="outer")
+
+
+    impressions_clicks_conversions = pd.merge(impressions_clicks, conversions, on="click_id", how="left")
+
+    # Filter by the campaign_id
+    campaign_data = impressions_clicks_conversions[impressions_clicks_conversions["campaign_id"] == campaign_id]
+
+    # Group by banner_id and sum the revenue
+    banner_revenue_clicks = campaign_data.groupby("banner_id").agg(
+        revenue = pd.NamedAgg(column="revenue", aggfunc="sum"),
+        clicks_count = pd.NamedAgg(column="click_id", aggfunc=lambda x: x.notnull().sum()),
+    )
+
+    banners_with_conversions_count = (banner_revenue_clicks["revenue"] > 0).sum()
+    
+
+    if banners_with_conversions_count >= 10:
+        top_banners = banner_revenue_clicks.sort_values('revenue', ascending=False).head(10)
+
+    elif 5 <= banners_with_conversions_count < 10:
+        top_banners = banner_revenue_clicks.sort_values('revenue' ,ascending=False).head(banners_with_conversions_count)
+
+    elif 1 <= banners_with_conversions_count < 5:
+        most_conversion_banners = banner_revenue_clicks.sort_values('revenue' ,ascending=False).head(banners_with_conversions_count)
+        most_clicked_banners = banner_revenue_clicks[banner_revenue_clicks['revenue'] == 0].sort_values('clicks_count', ascending=False).head(5-banner_revenue_clicks)
+        top_banners = pd.concat([most_conversion_banners, most_clicked_banners], axis=0)
+
+    else:
+        most_clicked_banners = banner_revenue_clicks[banner_revenue_clicks['clicks_count'] > 0].sort_values('clicks_count', ascending=False)
+
+        # check count of banners with clicks
+        clicked_banners_count = most_clicked_banners.shape[0]
+
+        if clicked_banners_count < 5:
+            random_rows_count = 5-clicked_banners_count
+            # randomly select 2 rows from the dataframe
+            random_banners = banner_revenue_clicks[banner_revenue_clicks['clicks_count'] == 0].sample(n=random_rows_count)
+            top_banners = pd.concat([most_clicked_banners, random_banners], axis=0)
+        else:
+            top_banners = most_clicked_banners
+
+    shuffled_banner_ids = np.random.permutation(top_banners.index)
+
+    return list(shuffled_banner_ids)
+
+
+@app.get("/campaigns/{campaign_id}", response_class=HTMLResponse)
+# @validate_url_param
+def get_images(campaign_id: int):
+    hour_quarter = get_hour_quarter()
+    # validate_campaign_id = validate_url_param(campaign_id, hour_quarter)
+    top_banner_ids = top_banners_by_campaign_id(campaign_id = campaign_id, hour_quarter=hour_quarter)
+
+    html_content = """
+        <html>
+            <head>
+                <title>Top Banners</title>
+            </head>
+            <body>
+                <h1>Top Banners</h1>
+                <div>
+        """
+    
+    for banner_id in top_banner_ids:
+        html_content += f'<img src="/{STATIC_DIR_NAME}/image_{banner_id}.png" width="200" height="200"/>\n'
+    
+    html_content += """
+                </div>
+            </body>
+        </html>
+    """
+
+    return html_content
