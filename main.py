@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
 from random import shuffle
+from cachetools import TTLCache
 from functools import lru_cache
-from fastapi import FastAPI, Query, Depends, HTTPException
+from fastapi import FastAPI, Query, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -16,7 +17,7 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="images"), name=STATIC_DIR_NAME)
 
 csv_sets = {}
-
+seen_banners_cache = TTLCache(maxsize=100, ttl=60)
 
 @app.on_event("startup")
 def startup_event():
@@ -50,6 +51,34 @@ def startup_event():
     csv_sets['conversions_2'] = conversions_2_df
     csv_sets['conversions_3'] = conversions_3_df
     csv_sets['conversions_4'] = conversions_4_df
+
+@lru_cache(maxsize=128)
+def top_banners_by_campaign_id_second_visit(campaign_id, hour_quarter, visitor_ip):
+    impressions, clicks, conversions = csv_sets[f"impressions_{hour_quarter}"], csv_sets[f"clicks_{hour_quarter}"], csv_sets[f"conversions_{hour_quarter}"]
+
+    if campaign_id not in impressions['campaign_id'].unique():
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    # Join the dataframes together
+    impressions_clicks = pd.merge(impressions, clicks, on=["banner_id", "campaign_id"], how="outer")
+
+
+    impressions_clicks_conversions = pd.merge(impressions_clicks, conversions, on="click_id", how="left")
+
+    # Filter by the campaign_id
+    campaign_data = impressions_clicks_conversions[impressions_clicks_conversions["campaign_id"] == campaign_id]
+
+    # Group by banner_id and sum the revenue
+    banner_revenue_clicks = campaign_data.groupby("banner_id").agg(
+        revenue = pd.NamedAgg(column="revenue", aggfunc="sum"),
+        clicks_count = pd.NamedAgg(column="click_id", aggfunc=lambda x: x.notnull().sum()),
+    )
+
+    banner_revenue_clicks_sorted = banner_revenue_clicks.sort_values(by=['revenue', 'clicks_count'], ascending=[False, False])
+    excluded_ids = seen_banners_cache[visitor_ip]
+    top_banners_second_visit = banner_revenue_clicks_sorted[~banner_revenue_clicks_sorted.index.isin(excluded_ids)].head(10)
+
+    return list(top_banners_second_visit.index)
 
 
 @lru_cache(maxsize=128)
@@ -111,9 +140,21 @@ def top_banners_by_campaign_id(campaign_id, hour_quarter):
 
 
 @app.get("/campaigns/{campaign_id}", response_class=HTMLResponse)
-def get_images(campaign_id: int):
+def get_images(campaign_id: int, request: Request):
     hour_quarter = get_hour_quarter()
-    top_banner_ids = top_banners_by_campaign_id(campaign_id = campaign_id, hour_quarter=hour_quarter)
+    # We check the cache (seen_banners_cache), if the value for an IP is None,
+    # then we follow the business rules, but if value is a list of seen ids,
+    # we return the top 10 row, excluding the seen ids.
+    visitor_ip = request.client.host
+
+    if visitor_ip in seen_banners_cache and seen_banners_cache[visitor_ip] is not None:
+        top_banner_ids = top_banners_by_campaign_id_second_visit(campaign_id, hour_quarter, visitor_ip)
+        seen_banners_cache[visitor_ip] = None
+    else:
+        top_banner_ids = top_banners_by_campaign_id(campaign_id = campaign_id, hour_quarter=hour_quarter)
+        seen_banners_cache[visitor_ip] = top_banner_ids
+    
+
     shuffled_banner_ids = shuffle(top_banner_ids)
 
     html_content = """
