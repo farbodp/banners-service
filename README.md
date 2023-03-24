@@ -57,7 +57,7 @@ I used caching to improve the performance, but other solutions can be:
 * merge CSV file before the server starts
 * Use combination of caching and `async` endponits.
 
-All of these soultions can be explored to find the option.
+All of these soultions can be explored to find the best option.
 
 ### Logic for banner selection
 
