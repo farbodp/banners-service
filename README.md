@@ -47,7 +47,7 @@ The stress test result (running locally) is shown in below:
 
 ![Stress test result](stress_test/stress_result.png "Stress test result")
 
-Since I used caching, the response time gradually decreases as the results are being cached. Eventually, the app handles 160 rps, which is 9600 requests per minute.
+Since I used caching, the response time gradually decreases as the results are being cached. Eventually, the app handles 160 rps, which is 9600 requests per minute. It should be mentioned that we have 50 concurrent users in this stress test, as stated in the command above.
 
 #### Other soultions
 
