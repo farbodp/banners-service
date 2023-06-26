@@ -21,36 +21,20 @@ seen_banners_cache = TTLCache(maxsize=100, ttl=60)
 
 @app.on_event("startup")
 def startup_event():
-    impressions_1_df = read_csv_remove_duplicates("csv/1/impressions_1.csv", log_file_path='logs/impressions_1_duplicates.log')
-    impressions_2_df = read_csv_remove_duplicates("csv/2/impressions_2.csv", log_file_path='logs/impressions_2_duplicates.log')
-    impressions_3_df = read_csv_remove_duplicates("csv/3/impressions_3.csv", log_file_path='logs/impressions_3_duplicates.log')
-    impressions_4_df = read_csv_remove_duplicates("csv/4/impressions_4.csv", log_file_path='logs/impressions_4_duplicates.log')
+    csv_files = {
+        'impressions': ['1', '2', '3', '4'],
+        'clicks': ['1', '2', '3', '4'],
+        'conversions': ['1', '2', '3', '4']
+    }
 
-    clicks_1_df = read_csv_remove_duplicates("csv/1/clicks_1.csv", log_file_path='logs/clicks_1_duplicates.log')
-    clicks_2_df = read_csv_remove_duplicates("csv/2/clicks_2.csv", log_file_path='logs/clicks_2_duplicates.log')
-    clicks_3_df = read_csv_remove_duplicates("csv/3/clicks_3.csv", log_file_path='logs/clicks_3_duplicates.log')
-    clicks_4_df = read_csv_remove_duplicates("csv/4/clicks_4.csv", log_file_path='logs/clicks_4_duplicates.log')
+    csv_sets = {}
 
-    conversions_1_df = read_csv_remove_duplicates("csv/1/conversions_1.csv", log_file_path='logs/conversions_1_duplicates.log')
-    conversions_2_df = read_csv_remove_duplicates("csv/2/conversions_2.csv", log_file_path='logs/conversions_2_duplicates.log')
-    conversions_3_df = read_csv_remove_duplicates("csv/3/conversions_3.csv", log_file_path='logs/conversions_3_duplicates.log')
-    conversions_4_df = read_csv_remove_duplicates("csv/4/conversions_4.csv", log_file_path='logs/conversions_4_duplicates.log')
+    for file_type, file_nums in csv_files.items():
+        for num in file_nums:
+            file_path = f"csv/{num}/{file_type}_{num}.csv"
+            log_file_path = f"logs/{file_type}_{num}_duplicates.log"
 
-
-    csv_sets['impressions_1'] = impressions_1_df
-    csv_sets['impressions_2'] = impressions_2_df
-    csv_sets['impressions_3'] = impressions_3_df
-    csv_sets['impressions_4'] = impressions_4_df
-
-    csv_sets['clicks_1'] = clicks_1_df
-    csv_sets['clicks_2'] = clicks_2_df
-    csv_sets['clicks_3'] = clicks_3_df
-    csv_sets['clicks_4'] = clicks_4_df
-
-    csv_sets['conversions_1'] = conversions_1_df
-    csv_sets['conversions_2'] = conversions_2_df
-    csv_sets['conversions_3'] = conversions_3_df
-    csv_sets['conversions_4'] = conversions_4_df
+            csv_sets[f"{file_type}_{num}"] = read_csv_remove_duplicates(file_path, log_file_path)
 
 @lru_cache(maxsize=128)
 def top_banners_by_campaign_id_second_visit(campaign_id, hour_quarter, visitor_ip):
