@@ -26,7 +26,7 @@ If you assume `X is the number of banners with conversions within a campaign`, t
 | X in range(1,5) | Collection of banners should consist of 5 banners, containing: The top x banners based on revenue within that campaign and Banners with the most clicks within that campaign to make up a collection of 5 unique banners.      |
 | X == 0 | Show the top ­5 banners based on clicks. If the number of banners with clicks is less than 5 within that campaign, then you should add random banners to make up a collection of 5 unique banners. |
 
-## Technical Requirements
+## Technical Requirements :computer:
 
 1. To avoid saturation for visitors, we believe that the top banners being served should not follow a fixed order based on their performance; but they should appear in a random sequence.
 
