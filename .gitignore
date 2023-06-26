@@ -1,5 +1,7 @@
-images/
+images/*
 *.log
 *.csv
 *.pyc
 .DS_Store
+
+!images/banners.png
