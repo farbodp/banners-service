@@ -14,6 +14,7 @@ def read_csv_remove_duplicates(file_path, log_file_path=None):
 
     return df
 
+
 def log_duplicates(file_path, df, log_file_path):
     duplicates = df[df.duplicated()]
     if duplicates.empty:
@@ -29,10 +30,14 @@ def log_duplicates(file_path, df, log_file_path):
     file_handler.setFormatter(formatter)
 
     logger.addHandler(file_handler)
-    logger.debug(f"Found {len(duplicates)} duplicate rows in {file_path}:\n{duplicates.to_string()}")
+    logger.debug(
+        f"Found {len(duplicates)} duplicate rows in {file_path}:\n{duplicates.to_string()}"
+    )
+
 
 def remove_duplicates(df):
     df.drop_duplicates(inplace=True)
+
 
 def get_hour_quarter():
     now = datetime.datetime.utcnow()
