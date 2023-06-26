@@ -27,8 +27,6 @@ def startup_event():
         'conversions': ['1', '2', '3', '4']
     }
 
-    csv_sets = {}
-
     for file_type, file_nums in csv_files.items():
         for num in file_nums:
             file_path = f"csv/{num}/{file_type}_{num}.csv"
