@@ -7,9 +7,22 @@ from fastapi import FastAPI, Query, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from utils.utils import read_csv_remove_duplicates, get_hour_quarter
-
-# from async_lru import alru_cache
+from utils.utils import (
+    read_csv_remove_duplicates,
+    get_hour_quarter,
+    validate_campaign_id,
+    join_dataframes,
+    filter_campaign_data,
+    calculate_banner_revenue_clicks,
+    count_banners_with_conversions,
+    select_top_revenue_banners,
+    select_most_clicked_banners,
+    select_random_banners,
+    combine_top_banners,
+    sort_banner_revenue_clicks,
+    exclude_ids,
+    select_top_rows,
+)
 
 
 STATIC_DIR_NAME = "static"
@@ -57,13 +70,13 @@ def top_banners_by_campaign_id(campaign_id, hour_quarter):
     top_banners = None
 
     if banners_with_conversions_count >= 10:
-        top_banners = select_top_banners(banner_revenue_clicks, 10)
+        top_banners = select_top_revenue_banners(banner_revenue_clicks, 10)
     elif 5 <= banners_with_conversions_count < 10:
-        top_banners = select_top_banners(
+        top_banners = select_top_revenue_banners(
             banner_revenue_clicks, banners_with_conversions_count
         )
     elif 1 <= banners_with_conversions_count < 5:
-        most_conversion_banners = select_top_banners(
+        most_conversion_banners = select_top_revenue_banners(
             banner_revenue_clicks, banners_with_conversions_count
         )
         most_clicked_banners = select_most_clicked_banners(
@@ -92,53 +105,6 @@ def top_banners_by_campaign_id(campaign_id, hour_quarter):
     return list(top_banners.index)
 
 
-def validate_campaign_id(impressions, campaign_id):
-    if campaign_id not in impressions['campaign_id'].unique():
-        raise HTTPException(status_code=404, detail="Campaign not found")
-
-
-def join_dataframes(impressions, clicks, conversions):
-    impressions_clicks = pd.merge(
-        impressions, clicks, on=["banner_id", "campaign_id"], how="outer"
-    )
-    return pd.merge(impressions_clicks, conversions, on="click_id", how="left")
-
-
-def filter_campaign_data(data, campaign_id):
-    return data[data["campaign_id"] == campaign_id]
-
-
-def calculate_banner_revenue_clicks(data):
-    return data.groupby("banner_id").agg(
-        revenue=pd.NamedAgg(column="revenue", aggfunc="sum"),
-        clicks_count=pd.NamedAgg(
-            column="click_id", aggfunc=lambda x: x.notnull().sum()
-        ),
-    )
-
-
-def count_banners_with_conversions(data):
-    return (data["revenue"] > 0).sum()
-
-
-def select_top_banners(data, count):
-    return data.sort_values('revenue', ascending=False).head(count)
-
-
-def select_most_clicked_banners(data):
-    return data[data['clicks_count'] > 0].sort_values(
-        'clicks_count', ascending=False
-    )
-
-
-def select_random_banners(data, count):
-    return data[data['clicks_count'] == 0].sample(n=count)
-
-
-def combine_top_banners(banners1, banners2):
-    return pd.concat([banners1, banners2], axis=0)
-
-
 @lru_cache(maxsize=128)
 def top_banners_by_campaign_id_second_visit(
     campaign_id, hour_quarter, visitor_ip
@@ -149,38 +115,17 @@ def top_banners_by_campaign_id_second_visit(
         csv_sets[f"conversions_{hour_quarter}"],
     )
 
-    if campaign_id not in impressions['campaign_id'].unique():
-        raise HTTPException(status_code=404, detail="Campaign not found")
+    validate_campaign_id(impressions, campaign_id)
 
-    # Join the dataframes together
-    impressions_clicks = pd.merge(
-        impressions, clicks, on=["banner_id", "campaign_id"], how="outer"
-    )
+    joined_data = join_dataframes(impressions, clicks, conversions)
+    campaign_data = filter_campaign_data(joined_data, campaign_id)
+    banner_revenue_clicks = calculate_banner_revenue_clicks(campaign_data)
 
-    impressions_clicks_conversions = pd.merge(
-        impressions_clicks, conversions, on="click_id", how="left"
-    )
+    banner_revenue_clicks_sorted = sort_banner_revenue_clicks(banner_revenue_clicks)
 
-    # Filter by the campaign_id
-    campaign_data = impressions_clicks_conversions[
-        impressions_clicks_conversions["campaign_id"] == campaign_id
-    ]
-
-    # Group by banner_id and sum the revenue
-    banner_revenue_clicks = campaign_data.groupby("banner_id").agg(
-        revenue=pd.NamedAgg(column="revenue", aggfunc="sum"),
-        clicks_count=pd.NamedAgg(
-            column="click_id", aggfunc=lambda x: x.notnull().sum()
-        ),
-    )
-
-    banner_revenue_clicks_sorted = banner_revenue_clicks.sort_values(
-        by=['revenue', 'clicks_count'], ascending=[False, False]
-    )
     excluded_ids = seen_banners_cache[visitor_ip]
-    top_banners_second_visit = banner_revenue_clicks_sorted[
-        ~banner_revenue_clicks_sorted.index.isin(excluded_ids)
-    ].head(10)
+    top_banners_excluded_ids = exclude_ids(banner_revenue_clicks_sorted, excluded_ids)
+    top_banners_second_visit = select_top_rows(banner_revenue_clicks_sorted, 10)
 
     return list(top_banners_second_visit.index)
 
