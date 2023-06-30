@@ -23,7 +23,7 @@ from utils.utils import (
     exclude_ids,
     select_top_rows,
 )
-
+from utils.html_content import generate_html_content
 
 STATIC_DIR_NAME = "static"
 app = FastAPI()
@@ -129,48 +129,24 @@ def top_banners_by_campaign_id_second_visit(
 
     return list(top_banners_second_visit.index)
 
-
 @app.get("/campaigns/{campaign_id}", response_class=HTMLResponse)
 def get_images(campaign_id: int, request: Request):
     hour_quarter = get_hour_quarter()
-    # We check the cache (seen_banners_cache), if the value for an IP is None,
-    # then we follow the business rules, but if value is a list of seen ids,
-    # we return the top 10 row, excluding the seen ids.
+    
+    # Determine visitor IP
     visitor_ip = request.client.host
-
-    if (
-        visitor_ip in seen_banners_cache
-        and seen_banners_cache[visitor_ip] is not None
-    ):
-        top_banner_ids = top_banners_by_campaign_id_second_visit(
-            campaign_id, hour_quarter, visitor_ip
-        )
+    
+    # Check cache for seen banners
+    if visitor_ip in seen_banners_cache and seen_banners_cache[visitor_ip] is not None:
+        top_banner_ids = top_banners_by_campaign_id_second_visit(campaign_id, hour_quarter, visitor_ip)
         seen_banners_cache[visitor_ip] = None
     else:
-        top_banner_ids = top_banners_by_campaign_id(
-            campaign_id=campaign_id, hour_quarter=hour_quarter
-        )
+        top_banner_ids = top_banners_by_campaign_id(campaign_id=campaign_id, hour_quarter=hour_quarter)
         seen_banners_cache[visitor_ip] = top_banner_ids
-
-    shuffled_banner_ids = shuffle(top_banner_ids)
-
-    html_content = """
-        <html>
-            <head>
-                <title>Top Banners</title>
-            </head>
-            <body>
-                <h1>Top Banners</h1>
-                <div>
-        """
-
-    for banner_id in shuffled_banner_ids:
-        html_content += f'<img src="/{STATIC_DIR_NAME}/image_{banner_id}.png" width="200" height="200"/>\n'
-
-    html_content += """
-                </div>
-            </body>
-        </html>
-    """
-
+    
+    shuffle(top_banner_ids)
+    
+    # Generate HTML content
+    html_content = generate_html_content(top_banner_ids, STATIC_DIR_NAME)
+    
     return html_content
