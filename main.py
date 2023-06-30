@@ -164,7 +164,7 @@ def get_images(campaign_id: int, request: Request):
                 <div>
         """
 
-    for banner_id in top_banner_ids:
+    for banner_id in shuffled_banner_ids:
         html_content += f'<img src="/{STATIC_DIR_NAME}/image_{banner_id}.png" width="200" height="200"/>\n'
 
     html_content += """
