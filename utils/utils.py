@@ -93,12 +93,17 @@ def select_random_banners(data, count):
 def combine_top_banners(banners1, banners2):
     return pd.concat([banners1, banners2], axis=0)
 
+
 def sort_banner_revenue_clicks(banner_revenue_clicks):
-    return banner_revenue_clicks.sort_values(by=['revenue', 'clicks_count'], ascending=[False, False])
+    return banner_revenue_clicks.sort_values(
+        by=['revenue', 'clicks_count'], ascending=[False, False]
+    )
+
 
 def exclude_ids(df, excluded_ids):
     df = df[~df.index.isin(excluded_ids)]
     return df
+
 
 def select_top_rows(df, count):
     return df.head(count)

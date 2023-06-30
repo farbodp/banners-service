@@ -121,32 +121,46 @@ def top_banners_by_campaign_id_second_visit(
     campaign_data = filter_campaign_data(joined_data, campaign_id)
     banner_revenue_clicks = calculate_banner_revenue_clicks(campaign_data)
 
-    banner_revenue_clicks_sorted = sort_banner_revenue_clicks(banner_revenue_clicks)
+    banner_revenue_clicks_sorted = sort_banner_revenue_clicks(
+        banner_revenue_clicks
+    )
 
     excluded_ids = seen_banners_cache[visitor_ip]
-    top_banners_excluded_ids = exclude_ids(banner_revenue_clicks_sorted, excluded_ids)
-    top_banners_second_visit = select_top_rows(banner_revenue_clicks_sorted, 10)
+    top_banners_excluded_ids = exclude_ids(
+        banner_revenue_clicks_sorted, excluded_ids
+    )
+    top_banners_second_visit = select_top_rows(
+        banner_revenue_clicks_sorted, 10
+    )
 
     return list(top_banners_second_visit.index)
+
 
 @app.get("/campaigns/{campaign_id}", response_class=HTMLResponse)
 def get_images(campaign_id: int, request: Request):
     hour_quarter = get_hour_quarter()
-    
+
     # Determine visitor IP
     visitor_ip = request.client.host
-    
+
     # Check cache for seen banners
-    if visitor_ip in seen_banners_cache and seen_banners_cache[visitor_ip] is not None:
-        top_banner_ids = top_banners_by_campaign_id_second_visit(campaign_id, hour_quarter, visitor_ip)
+    if (
+        visitor_ip in seen_banners_cache
+        and seen_banners_cache[visitor_ip] is not None
+    ):
+        top_banner_ids = top_banners_by_campaign_id_second_visit(
+            campaign_id, hour_quarter, visitor_ip
+        )
         seen_banners_cache[visitor_ip] = None
     else:
-        top_banner_ids = top_banners_by_campaign_id(campaign_id=campaign_id, hour_quarter=hour_quarter)
+        top_banner_ids = top_banners_by_campaign_id(
+            campaign_id=campaign_id, hour_quarter=hour_quarter
+        )
         seen_banners_cache[visitor_ip] = top_banner_ids
-    
+
     shuffle(top_banner_ids)
-    
+
     # Generate HTML content
     html_content = generate_html_content(top_banner_ids, STATIC_DIR_NAME)
-    
+
     return html_content
