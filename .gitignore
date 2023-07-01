@@ -5,3 +5,4 @@ images/*
 .DS_Store
 
 !images/banners.png
+!images/commit_messages.png
