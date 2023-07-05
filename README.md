@@ -15,6 +15,12 @@ Dataset consists of 3 csv files:
 
 By querying the above data sets, performance of the banners based on their revenue can be found (available in the conversions.csv).
 
+## Dataset
+
+* [Banner images](https://drive.google.com/file/d/1V1G-HD6A03gwdqgF122WdiisY4-T3kfR/view?usp=sharing)
+
+* [CSV](https://drive.google.com/file/d/1qT1VankoniXnTCx-w-2_UrBoR7SDqWeq/view?usp=sharing)
+
 ##  Business Rules :briefcase:
 
 If you assume `X is the number of banners with conversions within a campaign`, then there are a few possible scenarios:
